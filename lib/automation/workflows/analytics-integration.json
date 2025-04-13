@@ -1,0 +1,82 @@
+{
+  "name": "Analytics Integration Workflow",
+  "nodes": [
+    {
+      "id": "schedule",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.cron",
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyHour"
+            }
+          ]
+        }
+      },
+      "position": [250, 300]
+    },
+    {
+      "id": "googleAnalytics",
+      "name": "Google Analytics",
+      "type": "n8n-nodes-base.googleAnalytics",
+      "parameters": {
+        "resource": "report",
+        "metrics": ["ga:users", "ga:sessions", "ga:pageviews"],
+        "dimensions": ["ga:date", "ga:source", "ga:medium"]
+      },
+      "position": [450, 300]
+    },
+    {
+      "id": "mixpanel",
+      "name": "Mixpanel",
+      "type": "n8n-nodes-base.mixpanel",
+      "parameters": {
+        "resource": "event",
+        "operation": "track",
+        "event": "={{$json[\"event\"]}}",
+        "properties": "={{$json[\"properties\"]}}"
+      },
+      "position": [650, 300]
+    },
+    {
+      "id": "analysis",
+      "name": "Analyze Data",
+      "type": "n8n-nodes-base.function",
+      "parameters": {
+        "functionCode": "return {
+          json: {
+            ...analyzeMetrics($input.first().json),
+            timestamp: new Date().toISOString()
+          }
+        }"
+      },
+      "position": [850, 300]
+    },
+    {
+      "id": "dashboard",
+      "name": "Update Dashboard",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{$env.DASHBOARD_API_URL}}/metrics",
+        "method": "POST",
+        "body": "={{$json}}"
+      },
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "schedule": {
+      "main": [[{"node": "googleAnalytics", "type": "main", "index": 0}]]
+    },
+    "googleAnalytics": {
+      "main": [[{"node": "mixpanel", "type": "main", "index": 0}]]
+    },
+    "mixpanel": {
+      "main": [[{"node": "analysis", "type": "main", "index": 0}]]
+    },
+    "analysis": {
+      "main": [[{"node": "dashboard", "type": "main", "index": 0}]]
+    }
+  }
+}

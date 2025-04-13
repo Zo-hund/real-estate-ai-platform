@@ -1,0 +1,79 @@
+{
+  "name": "Marketing Integration Workflow",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Marketing Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "path": "marketing-events",
+        "options": {}
+      },
+      "position": [250, 300]
+    },
+    {
+      "id": "mailchimp",
+      "name": "Mailchimp",
+      "type": "n8n-nodes-base.mailchimp",
+      "parameters": {
+        "resource": "list",
+        "operation": "add",
+        "listId": "={{$json[\"listId\"]}}",
+        "email": "={{$json[\"email\"]}}",
+        "fields": "={{$json[\"fields\"]}}"
+      },
+      "position": [450, 300]
+    },
+    {
+      "id": "facebook",
+      "name": "Facebook Ads",
+      "type": "n8n-nodes-base.facebookAds",
+      "parameters": {
+        "resource": "adSet",
+        "operation": "create",
+        "campaignId": "={{$json[\"campaignId\"]}}",
+        "name": "={{$json[\"name\"]}}",
+        "targeting": "={{$json[\"targeting\"]}}"
+      },
+      "position": [650, 300]
+    },
+    {
+      "id": "automation",
+      "name": "Marketing Automation",
+      "type": "n8n-nodes-base.function",
+      "parameters": {
+        "functionCode": "return {
+          json: {
+            ...automateMarketing($input.first().json),
+            timestamp: new Date().toISOString()
+          }
+        }"
+      },
+      "position": [850, 300]
+    },
+    {
+      "id": "notification",
+      "name": "Send Notification",
+      "type": "n8n-nodes-base.slack",
+      "parameters": {
+        "channel": "#marketing",
+        "text": "=Marketing Event: {{$json[\"event\"]}} completed"
+      },
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "webhook": {
+      "main": [[{"node": "mailchimp", "type": "main", "index": 0}]]
+    },
+    "mailchimp": {
+      "main": [[{"node": "facebook", "type": "main", "index": 0}]]
+    },
+    "facebook": {
+      "main": [[{"node": "automation", "type": "main", "index": 0}]]
+    },
+    "automation": {
+      "main": [[{"node": "notification", "type": "main", "index": 0}]]
+    }
+  }
+}

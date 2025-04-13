@@ -1,0 +1,80 @@
+{
+  "name": "Payment Integration Workflow",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Payment Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "path": "payment-events",
+        "options": {}
+      },
+      "position": [250, 300]
+    },
+    {
+      "id": "stripe",
+      "name": "Stripe",
+      "type": "n8n-nodes-base.stripe",
+      "parameters": {
+        "resource": "charge",
+        "operation": "create",
+        "amount": "={{$json[\"amount\"]}}",
+        "currency": "={{$json[\"currency\"]}}",
+        "source": "={{$json[\"source\"]}}"
+      },
+      "position": [450, 300]
+    },
+    {
+      "id": "paypal",
+      "name": "PayPal",
+      "type": "n8n-nodes-base.payPal",
+      "parameters": {
+        "resource": "payment",
+        "operation": "create",
+        "amount": "={{$json[\"amount\"]}}",
+        "currency": "={{$json[\"currency\"]}}"
+      },
+      "position": [650, 300]
+    },
+    {
+      "id": "verification",
+      "name": "Payment Verification",
+      "type": "n8n-nodes-base.function",
+      "parameters": {
+        "functionCode": "return {
+          json: {
+            ...verifyPayment($input.first().json),
+            timestamp: new Date().toISOString()
+          }
+        }"
+      },
+      "position": [850, 300]
+    },
+    {
+      "id": "accounting",
+      "name": "Update Accounting",
+      "type": "n8n-nodes-base.quickbooks",
+      "parameters": {
+        "resource": "payment",
+        "operation": "create",
+        "customerId": "={{$json[\"customerId\"]}}",
+        "amount": "={{$json[\"amount\"]}}"
+      },
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "webhook": {
+      "main": [[{"node": "stripe", "type": "main", "index": 0}]]
+    },
+    "stripe": {
+      "main": [[{"node": "paypal", "type": "main", "index": 0}]]
+    },
+    "paypal": {
+      "main": [[{"node": "verification", "type": "main", "index": 0}]]
+    },
+    "verification": {
+      "main": [[{"node": "accounting", "type": "main", "index": 0}]]
+    }
+  }
+}

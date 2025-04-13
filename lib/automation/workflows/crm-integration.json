@@ -1,0 +1,78 @@
+{
+  "name": "CRM Integration Workflow",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "CRM Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "path": "crm-events",
+        "options": {}
+      },
+      "position": [250, 300]
+    },
+    {
+      "id": "salesforce",
+      "name": "Salesforce",
+      "type": "n8n-nodes-base.salesforce",
+      "parameters": {
+        "operation": "create",
+        "sobject": "={{$json[\"objectType\"]}}",
+        "fields": "={{$json[\"fields\"]}}"
+      },
+      "position": [450, 300]
+    },
+    {
+      "id": "hubspot",
+      "name": "HubSpot",
+      "type": "n8n-nodes-base.hubspot",
+      "parameters": {
+        "resource": "={{$json[\"resource\"]}}",
+        "operation": "={{$json[\"operation\"]}}",
+        "properties": "={{$json[\"properties\"]}}"
+      },
+      "position": [650, 300]
+    },
+    {
+      "id": "propertySync",
+      "name": "Property Sync",
+      "type": "n8n-nodes-base.function",
+      "parameters": {
+        "functionCode": "return {
+          json: {
+            ...syncPropertyData($input.first().json),
+            timestamp: new Date().toISOString()
+          }
+        }"
+      },
+      "position": [850, 300]
+    },
+    {
+      "id": "database",
+      "name": "Update Database",
+      "type": "n8n-nodes-base.postgres",
+      "parameters": {
+        "operation": "insert",
+        "schema": "public",
+        "table": "crm_sync_log",
+        "columns": "event,data,timestamp",
+        "values": "={{$json[\"event\"]}},={{$json[\"data\"]}},={{$json[\"timestamp\"]}}"
+      },
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "webhook": {
+      "main": [[{"node": "salesforce", "type": "main", "index": 0}]]
+    },
+    "salesforce": {
+      "main": [[{"node": "hubspot", "type": "main", "index": 0}]]
+    },
+    "hubspot": {
+      "main": [[{"node": "propertySync", "type": "main", "index": 0}]]
+    },
+    "propertySync": {
+      "main": [[{"node": "database", "type": "main", "index": 0}]]
+    }
+  }
+}
