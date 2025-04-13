@@ -1,0 +1,88 @@
+{
+  "name": "Property Monitoring Workflow",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "path": "property-update",
+        "options": {}
+      },
+      "position": [250, 300]
+    },
+    {
+      "id": "propertyCheck",
+      "name": "Property Check",
+      "type": "n8n-nodes-base.function",
+      "parameters": {
+        "functionCode": "return {
+          json: {
+            propertyId: $input.first().json.propertyId,
+            changes: $input.first().json.changes,
+            timestamp: new Date().toISOString()
+          }
+        }"
+      },
+      "position": [450, 300]
+    },
+    {
+      "id": "notification",
+      "name": "Send Notification",
+      "type": "n8n-nodes-base.slack",
+      "parameters": {
+        "channel": "#property-updates",
+        "text": "=Property Update: {{$json[\"changes\"]}} for Property {{$json[\"propertyId\"]}}"
+      },
+      "position": [650, 300]
+    },
+    {
+      "id": "database",
+      "name": "Update Database",
+      "type": "n8n-nodes-base.postgres",
+      "parameters": {
+        "operation": "insert",
+        "schema": "public",
+        "table": "property_updates",
+        "columns": "propertyId,changes,timestamp",
+        "values": "={{$json[\"propertyId\"]}},={{$json[\"changes\"]}},={{$json[\"timestamp\"]}}"
+      },
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "webhook": {
+      "main": [
+        [
+          {
+            "node": "propertyCheck",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "propertyCheck": {
+      "main": [
+        [
+          {
+            "node": "notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "notification": {
+      "main": [
+        [
+          {
+            "node": "database",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

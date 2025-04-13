@@ -1,0 +1,92 @@
+{
+  "name": "Market Analysis Workflow",
+  "nodes": [
+    {
+      "id": "schedule",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.cron",
+      "parameters": {
+        "triggerTimes": {
+          "item": [
+            {
+              "mode": "everyDay",
+              "hour": 0,
+              "minute": 0
+            }
+          ]
+        }
+      },
+      "position": [250, 300]
+    },
+    {
+      "id": "fetchData",
+      "name": "Fetch Market Data",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "={{$env.API_URL}}/api/market-data",
+        "headers": {
+          "Authorization": "Bearer {{$env.API_KEY}}"
+        }
+      },
+      "position": [450, 300]
+    },
+    {
+      "id": "analysis",
+      "name": "Analyze Market Trends",
+      "type": "n8n-nodes-base.function",
+      "parameters": {
+        "functionCode": "const trends = analyzeMarketTrends($input.first().json);\nreturn { json: { trends, timestamp: new Date().toISOString() } };"
+      },
+      "position": [650, 300]
+    },
+    {
+      "id": "report",
+      "name": "Generate Report",
+      "type": "n8n-nodes-base.function",
+      "parameters": {
+        "functionCode": "const report = generateMarketReport($input.first().json);\nreturn { json: { ...report, timestamp: new Date().toISOString() } };"
+      },
+      "position": [850, 300]
+    },
+    {
+      "id": "storage",
+      "name": "Store Report",
+      "type": "n8n-nodes-base.postgres",
+      "parameters": {
+        "operation": "insert",
+        "schema": "public",
+        "table": "market_reports",
+        "columns": "report,trends,timestamp",
+        "values": "={{$json[\"report\"]}},={{$json[\"trends\"]}},={{$json[\"timestamp\"]}}"
+      },
+      "position": [1050, 300]
+    },
+    {
+      "id": "notification",
+      "name": "Send Report",
+      "type": "n8n-nodes-base.slack",
+      "parameters": {
+        "channel": "#market-analysis",
+        "text": "=Daily Market Analysis Report\n{{$json[\"report\"]}}"
+      },
+      "position": [1250, 300]
+    }
+  ],
+  "connections": {
+    "schedule": {
+      "main": [[{"node": "fetchData", "type": "main", "index": 0}]]
+    },
+    "fetchData": {
+      "main": [[{"node": "analysis", "type": "main", "index": 0}]]
+    },
+    "analysis": {
+      "main": [[{"node": "report", "type": "main", "index": 0}]]
+    },
+    "report": {
+      "main": [[{"node": "storage", "type": "main", "index": 0}]]
+    },
+    "storage": {
+      "main": [[{"node": "notification", "type": "main", "index": 0}]]
+    }
+  }
+}

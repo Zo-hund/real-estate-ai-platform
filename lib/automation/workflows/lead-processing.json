@@ -1,0 +1,76 @@
+{
+  "name": "Lead Processing Workflow",
+  "nodes": [
+    {
+      "id": "webhook",
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "parameters": {
+        "path": "new-lead",
+        "options": {}
+      },
+      "position": [250, 300]
+    },
+    {
+      "id": "enrichment",
+      "name": "Lead Enrichment",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "url": "=https://api.clearbit.com/v2/people/find?email={{$json[\"email\"]}}",
+        "headers": {
+          "Authorization": "Bearer {{$env.CLEARBIT_API_KEY}}"
+        }
+      },
+      "position": [450, 300]
+    },
+    {
+      "id": "scoring",
+      "name": "Lead Scoring",
+      "type": "n8n-nodes-base.function",
+      "parameters": {
+        "functionCode": "const score = calculateLeadScore($input.first().json);\nreturn { json: { ...$input.first().json, score } };"
+      },
+      "position": [650, 300]
+    },
+    {
+      "id": "crm",
+      "name": "CRM Update",
+      "type": "n8n-nodes-base.hubspot",
+      "parameters": {
+        "resource": "contact",
+        "operation": "upsert",
+        "email": "={{$json[\"email\"]}}",
+        "additionalFields": {
+          "firstName": "={{$json[\"firstName\"]}}",
+          "lastName": "={{$json[\"lastName\"]}}",
+          "score": "={{$json[\"score\"]}}"
+        }
+      },
+      "position": [850, 300]
+    },
+    {
+      "id": "notification",
+      "name": "Team Notification",
+      "type": "n8n-nodes-base.slack",
+      "parameters": {
+        "channel": "#leads",
+        "text": "=New Lead: {{$json[\"firstName\"]}} {{$json[\"lastName\"]}} (Score: {{$json[\"score\"]}})"
+      },
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "webhook": {
+      "main": [[{"node": "enrichment", "type": "main", "index": 0}]]
+    },
+    "enrichment": {
+      "main": [[{"node": "scoring", "type": "main", "index": 0}]]
+    },
+    "scoring": {
+      "main": [[{"node": "crm", "type": "main", "index": 0}]]
+    },
+    "crm": {
+      "main": [[{"node": "notification", "type": "main", "index": 0}]]
+    }
+  }
+}
