@@ -19,6 +19,7 @@ model User {
   sessions      Session[]
   searches      Search[]
   favorites     Property[]
+  apiKeys       ApiKey[]
 }
 
 model Account {
@@ -65,6 +66,9 @@ model Property {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   favoredBy   User[]
+  source      String?  // Data source provider
+  externalId  String?  // ID from external provider
+  lastSync    DateTime? // Last synchronization timestamp
 }
 
 model Search {
@@ -74,4 +78,78 @@ model Search {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
+}
+
+// API-related models
+model Integration {
+  id          String   @id @default(cuid())
+  name        String
+  provider    String
+  apiKey      String?
+  apiSecret   String?
+  webhookUrl  String?
+  status      String   @default("inactive")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  lastSync    DateTime?
+  config      Json?
+}
+
+model ApiKey {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  name        String
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime?
+  lastUsed    DateTime?
+  permissions String[]
+}
+
+model ApiRequest {
+  id        String   @id @default(cuid())
+  path      String
+  method    String
+  status    Int
+  latency   Int
+  apiKeyId  String?
+  createdAt DateTime @default(now())
+  ip        String?
+  userAgent String?
+}
+
+model ApiError {
+  id        String   @id @default(cuid())
+  type      String
+  message   String
+  stack     String?
+  apiKeyId  String?
+  createdAt DateTime @default(now())
+}
+
+model WebhookEvent {
+  id          String   @id @default(cuid())
+  provider    String
+  type        String
+  payload     Json
+  processedAt DateTime
+  createdAt   DateTime @default(now())
+  status      String   @default("processed")
+  error       String?
+}
+
+model MarketData {
+  id            String   @id @default(cuid())
+  region        String
+  medianPrice   Float
+  inventory     Int
+  daysOnMarket  Float
+  pricePerSqft  Float
+  marketTrend   String
+  source        String
+  lastUpdate    DateTime
+  createdAt     DateTime @default(now())
+
+  @@unique([region, source])
 }
