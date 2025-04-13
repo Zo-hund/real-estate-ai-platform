@@ -1,27 +1,25 @@
-import './globals.css';
-import { Inter } from 'next/font/google';
-import Navbar from '@/components/Navbar';
-import Footer from '@/components/Footer';
+import type { Metadata } from 'next'
+import { Inter } from 'next/font/google'
+import './globals.css'
+import { RootLayout } from '../components/layout/RootLayout'
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ['latin'] })
 
-export const metadata = {
-  title: 'AI-Powered Real Estate Platform',
-  description: 'Find your dream property with the help of AI',
-};
+export const metadata: Metadata = {
+  title: 'Real Estate AI Platform',
+  description: 'Intelligent real estate solutions powered by AI',
+}
 
-export default function RootLayout({
+export default function Layout({
   children,
 }: {
-  children: React.ReactNode;
+  children: React.ReactNode
 }) {
   return (
     <html lang="en">
       <body className={inter.className}>
-        <Navbar />
-        <main className="min-h-screen">{children}</main>
-        <Footer />
+        <RootLayout>{children}</RootLayout>
       </body>
     </html>
-  );
+  )
 }
