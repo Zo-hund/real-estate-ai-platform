@@ -2,91 +2,96 @@ import { TwitterApi } from 'twitter-api-v2';
 import { Client } from '@notionhq/client';
 import { LinkedInClient } from './linkedin';
 import { InstagramClient } from './instagram';
-import { FacebookClient } from './facebook';
 
-// Initialize social media clients
-export const twitterClient = new TwitterApi({
-  appKey: process.env.TWITTER_API_KEY!,
-  appSecret: process.env.TWITTER_API_SECRET!,
-  accessToken: process.env.TWITTER_ACCESS_TOKEN!,
-  accessSecret: process.env.TWITTER_ACCESS_SECRET!,
-});
-
-export const notionClient = new Client({
-  auth: process.env.NOTION_TOKEN,
-});
-
-export const linkedinClient = new LinkedInClient({
-  clientId: process.env.LINKEDIN_CLIENT_ID!,
-  clientSecret: process.env.LINKEDIN_CLIENT_SECRET!,
-});
-
-export const instagramClient = new InstagramClient({
-  accessToken: process.env.INSTAGRAM_ACCESS_TOKEN!,
-});
-
-export const facebookClient = new FacebookClient({
-  accessToken: process.env.FACEBOOK_ACCESS_TOKEN!,
-});
-
-// Social media data collectors
-export async function collectSocialMediaListings() {
-  const listings = [];
-
-  // Collect Twitter real estate listings
-  const twitterListings = await twitterClient.v2.search(
-    'real estate listing OR property for sale -is:retweet'
-  );
-
-  // Collect LinkedIn property posts
-  const linkedinPosts = await linkedinClient.getPropertyPosts();
-
-  // Collect Instagram real estate posts
-  const instagramPosts = await instagramClient.getRealtorPosts();
-
-  // Collect Facebook marketplace listings
-  const facebookListings = await facebookClient.getMarketplaceListings('real_estate');
-
-  return {
-    twitter: twitterListings,
-    linkedin: linkedinPosts,
-    instagram: instagramPosts,
-    facebook: facebookListings,
+export interface SocialMediaPost {
+  id: string;
+  platform: string;
+  content: string;
+  media: string[];
+  author: string;
+  timestamp: Date;
+  location?: {
+    lat: number;
+    lng: number;
+    address?: string;
   };
+  propertyDetails?: {
+    price?: number;
+    bedrooms?: number;
+    bathrooms?: number;
+    sqft?: number;
+    type?: string;
+  };
+  metadata: Record<string, any>;
 }
 
-// Social media monitoring
-export async function monitorSocialMediaTrends() {
-  const trends = [];
+export class SocialMediaIntegration {
+  private twitterClient: TwitterApi;
+  private notionClient: Client;
+  private linkedinClient: LinkedInClient;
+  private instagramClient: InstagramClient;
 
-  // Monitor Twitter real estate trends
-  const twitterTrends = await twitterClient.v2.trendingTopics('real_estate');
+  constructor() {
+    this.twitterClient = new TwitterApi(process.env.TWITTER_BEARER_TOKEN!);
+    this.notionClient = new Client({ auth: process.env.NOTION_API_KEY });
+    this.linkedinClient = new LinkedInClient(process.env.LINKEDIN_ACCESS_TOKEN!);
+    this.instagramClient = new InstagramClient(process.env.INSTAGRAM_ACCESS_TOKEN!);
+  }
 
-  // Monitor LinkedIn industry insights
-  const linkedinInsights = await linkedinClient.getIndustryInsights('real_estate');
+  async fetchRelevantPosts(query: string, options: { limit?: number; timeframe?: string } = {}) {
+    const [twitterPosts, linkedinPosts, instagramPosts] = await Promise.all([
+      this.fetchTwitterPosts(query, options),
+      this.fetchLinkedInPosts(query, options),
+      this.fetchInstagramPosts(query, options),
+    ]);
 
-  return {
-    twitter: twitterTrends,
-    linkedin: linkedinInsights,
-  };
-}
+    return [...twitterPosts, ...linkedinPosts, ...instagramPosts];
+  }
 
-// Social media engagement tracking
-export async function trackSocialMediaEngagement(propertyId: string) {
-  const engagement = [];
+  private async fetchTwitterPosts(query: string, options: { limit?: number } = {}): Promise<SocialMediaPost[]> {
+    const tweets = await this.twitterClient.v2.search({
+      query: `${query} -is:retweet`,
+      max_results: options.limit || 100,
+      'tweet.fields': ['created_at', 'geo', 'entities'],
+      expansions: ['author_id', 'attachments.media_keys'],
+    });
 
-  // Track Twitter engagement
-  const twitterEngagement = await twitterClient.v2.getTweetEngagement(propertyId);
+    return tweets.data.map(tweet => ({
+      id: tweet.id,
+      platform: 'twitter',
+      content: tweet.text,
+      media: tweet.attachments?.media_keys || [],
+      author: tweet.author_id,
+      timestamp: new Date(tweet.created_at!),
+      location: tweet.geo?.coordinates,
+      metadata: tweet,
+    }));
+  }
 
-  // Track LinkedIn post performance
-  const linkedinEngagement = await linkedinClient.getPostEngagement(propertyId);
+  private async fetchLinkedInPosts(query: string, options: { limit?: number } = {}): Promise<SocialMediaPost[]> {
+    // Implementation for LinkedIn posts
+    return [];
+  }
 
-  // Track Instagram post insights
-  const instagramEngagement = await instagramClient.getPostInsights(propertyId);
+  private async fetchInstagramPosts(query: string, options: { limit?: number } = {}): Promise<SocialMediaPost[]> {
+    // Implementation for Instagram posts
+    return [];
+  }
 
-  return {
-    twitter: twitterEngagement,
-    linkedin: linkedinEngagement,
-    instagram: instagramEngagement,
-  };
+  async extractPropertyDetails(post: SocialMediaPost) {
+    const content = post.content.toLowerCase();
+    
+    // Extract basic property details using regex
+    const priceMatch = content.match(/\$([\d,]+)/)?.[1];
+    const bedroomsMatch = content.match(/(\d+)\s*bed/i)?.[1];
+    const bathroomsMatch = content.match(/(\d+)\s*bath/i)?.[1];
+    const sqftMatch = content.match(/(\d+)\s*sq\s*ft/i)?.[1];
+
+    return {
+      price: priceMatch ? parseFloat(priceMatch.replace(',', '')) : undefined,
+      bedrooms: bedroomsMatch ? parseInt(bedroomsMatch) : undefined,
+      bathrooms: bathroomsMatch ? parseInt(bathroomsMatch) : undefined,
+      sqft: sqftMatch ? parseInt(sqftMatch) : undefined,
+    };
+  }
 }
