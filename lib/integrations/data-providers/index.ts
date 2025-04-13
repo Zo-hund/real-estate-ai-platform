@@ -1,125 +1,118 @@
-import { ZillowProvider } from './zillow';
-import { RealtorProvider } from './realtor';
-import { MLSProvider } from './mls';
-import { RedfinProvider } from './redfin';
-import { TruliaProvider } from './trulia';
+import axios from 'axios';
 
-export interface PropertyListing {
-  id: string;
-  source: string;
-  url: string;
-  price: number;
-  address: string;
-  bedrooms: number;
-  bathrooms: number;
-  sqft: number;
-  lotSize?: number;
-  yearBuilt?: number;
-  propertyType: string;
-  description: string;
-  features: string[];
-  images: string[];
-  latitude: number;
-  longitude: number;
-  zestimate?: number;
-  rentZestimate?: number;
-  taxAssessment?: number;
-  lastSold?: {
-    date: Date;
-    price: number;
-  };
-  schools?: Array<{
-    name: string;
-    rating: number;
-    distance: number;
-    type: string;
-  }>;
-  walkScore?: number;
-  transitScore?: number;
-  crimeScore?: number;
-}
+// Real estate data providers
+export const dataProviders = {
+  zillow: {
+    name: 'Zillow API',
+    baseUrl: 'https://api.zillow.com/v2',
+    endpoints: {
+      propertyDetails: '/property',
+      propertySearch: '/search',
+      propertyValuation: '/valuation',
+      propertyInsights: '/insights',
+    },
+  },
+  realtor: {
+    name: 'Realtor.com API',
+    baseUrl: 'https://api.realtor.com/v2',
+    endpoints: {
+      propertySearch: '/properties',
+      marketTrends: '/trends',
+      neighborhoods: '/neighborhoods',
+    },
+  },
+  mls: {
+    name: 'MLS Data',
+    baseUrl: process.env.MLS_API_URL,
+    endpoints: {
+      listings: '/listings',
+      agents: '/agents',
+      offices: '/offices',
+    },
+  },
+  redfin: {
+    name: 'Redfin API',
+    baseUrl: 'https://api.redfin.com/v1',
+    endpoints: {
+      propertySearch: '/search',
+      marketInsights: '/insights',
+      estimates: '/estimates',
+    },
+  },
+  trulia: {
+    name: 'Trulia API',
+    baseUrl: 'https://api.trulia.com/v2',
+    endpoints: {
+      properties: '/properties',
+      neighborhoods: '/neighborhoods',
+      stats: '/statistics',
+    },
+  },
+  propertyShark: {
+    name: 'PropertyShark API',
+    baseUrl: 'https://api.propertyshark.com/v1',
+    endpoints: {
+      propertyData: '/property',
+      ownershipHistory: '/history',
+      marketAnalysis: '/analysis',
+    },
+  },
+  loopnet: {
+    name: 'LoopNet API',
+    baseUrl: 'https://api.loopnet.com/v1',
+    endpoints: {
+      commercialProperties: '/properties',
+      marketReports: '/reports',
+      analytics: '/analytics',
+    },
+  },
+};
 
-export class DataProviderIntegration {
-  private zillowProvider: ZillowProvider;
-  private realtorProvider: RealtorProvider;
-  private mlsProvider: MLSProvider;
-  private redfinProvider: RedfinProvider;
-  private truliaProvider: TruliaProvider;
+// Data provider API clients
+export class RealEstateDataProvider {
+  private apiKey: string;
+  private provider: any;
 
-  constructor() {
-    this.zillowProvider = new ZillowProvider();
-    this.realtorProvider = new RealtorProvider();
-    this.mlsProvider = new MLSProvider();
-    this.redfinProvider = new RedfinProvider();
-    this.truliaProvider = new TruliaProvider();
-  }
+  constructor(providerName: string, apiKey: string) {
+    this.apiKey = apiKey;
+    this.provider = dataProviders[providerName];
 
-  async searchProperties(criteria: {
-    location: string;
-    minPrice?: number;
-    maxPrice?: number;
-    bedrooms?: number;
-    bathrooms?: number;
-    propertyType?: string;
-    minSqft?: number;
-    maxSqft?: number;
-    keywords?: string[];
-  }): Promise<PropertyListing[]> {
-    const results = await Promise.allSettled([
-      this.zillowProvider.search(criteria),
-      this.realtorProvider.search(criteria),
-      this.mlsProvider.search(criteria),
-      this.redfinProvider.search(criteria),
-      this.truliaProvider.search(criteria),
-    ]);
-
-    const listings: PropertyListing[] = [];
-    results.forEach((result) => {
-      if (result.status === 'fulfilled') {
-        listings.push(...result.value);
-      }
-    });
-
-    return listings;
-  }
-
-  async getPropertyDetails(propertyId: string, source: string): Promise<PropertyListing | null> {
-    switch (source) {
-      case 'zillow':
-        return this.zillowProvider.getDetails(propertyId);
-      case 'realtor':
-        return this.realtorProvider.getDetails(propertyId);
-      case 'mls':
-        return this.mlsProvider.getDetails(propertyId);
-      case 'redfin':
-        return this.redfinProvider.getDetails(propertyId);
-      case 'trulia':
-        return this.truliaProvider.getDetails(propertyId);
-      default:
-        return null;
+    if (!this.provider) {
+      throw new Error(`Provider ${providerName} not supported`);
     }
   }
 
-  async getMarketTrends(location: string): Promise<{
-    medianPrice: number;
-    priceHistory: Array<{ date: Date; price: number }>;
-    inventory: number;
-    daysOnMarket: number;
-    pricePerSqft: number;
-  }> {
-    const [zillow, realtor, redfin] = await Promise.all([
-      this.zillowProvider.getMarketTrends(location),
-      this.realtorProvider.getMarketTrends(location),
-      this.redfinProvider.getMarketTrends(location),
-    ]);
+  async searchProperties(params: any) {
+    const endpoint = this.provider.endpoints.propertySearch;
+    return this.makeRequest('GET', endpoint, params);
+  }
 
-    // Aggregate and average the data from different sources
-    return {
-      medianPrice: (zillow.medianPrice + realtor.medianPrice + redfin.medianPrice) / 3,
-      priceHistory: [...zillow.priceHistory, ...realtor.priceHistory, ...redfin.priceHistory],
-      inventory: Math.round((zillow.inventory + realtor.inventory + redfin.inventory) / 3),
-      daysOnMarket: Math.round((zillow.daysOnMarket + realtor.daysOnMarket + redfin.daysOnMarket) / 3),
-      pricePerSqft: (zillow.pricePerSqft + realtor.pricePerSqft + redfin.pricePerSqft) / 3,
-    };
+  async getPropertyDetails(propertyId: string) {
+    const endpoint = this.provider.endpoints.propertyDetails;
+    return this.makeRequest('GET', `${endpoint}/${propertyId}`);
+  }
+
+  async getMarketTrends(location: string) {
+    const endpoint = this.provider.endpoints.marketTrends;
+    return this.makeRequest('GET', endpoint, { location });
+  }
+
+  private async makeRequest(method: string, endpoint: string, params?: any) {
+    try {
+      const response = await axios({
+        method,
+        url: `${this.provider.baseUrl}${endpoint}`,
+        params,
+        headers: {
+          'Authorization': `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return response.data;
+    } catch (error) {
+      console.error(`Error making request to ${this.provider.name}:`, error);
+      throw error;
+    }
   }
 }
